@@ -1,6 +1,6 @@
 /*
 apiban.go is released under the MIT License <http://www.opensource.org/licenses/mit-license.php
-Copyright (C) ITsysCOM. All Rights Reserved.
+Copyright (C) ITsysCOM GmbH
 Provides a client for APIBan writen in go.
 */
 
@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -29,6 +30,7 @@ var (
 const (
 	noneID = "none"
 	banned = "/banned/"
+	check  = "/check/"
 )
 
 type apibanObj struct {
@@ -84,12 +86,87 @@ func getNextAPIBan(url string) (ID string, IPs []string, err error) {
 		err = fmt.Errorf("unexpected status code<%s>", resp.Status)
 		return
 	}
-	obj := new(apibanObj)
-	if err = json.NewDecoder(resp.Body).Decode(obj); err != nil {
+	var obj *apibanObj
+	if obj, err = decodeObj(resp.Body); err != nil {
 		return
 	}
-	switch ID = obj.ID; ID {
-	case "none": // non-error case
+	ID = obj.ID
+	if obj.Ipaddress == nil {
+		return
+	}
+	val := obj.Ipaddress.([]interface{})
+	if len(val) == 0 {
+		return
+	}
+	if val[0] == "no new bans" {
+		return
+	}
+	IPs = make([]string, len(val))
+	for i, v := range val {
+		IPs[i] = v.(string)
+	}
+	return
+}
+
+// CheckIP this function will check if the IP is banned by apiban
+// in case of a rate limit exceeded will continue with the next apiKey
+func CheckIP(IP string, apiKeys ...string) (banned bool, err error) {
+	if len(IP) == 0 {
+		err = errors.New("IP address is required")
+		return
+	}
+	if len(apiKeys) == 0 {
+		err = errors.New("API keys are required")
+		return
+	}
+	for _, apiKey := range apiKeys {
+		url := RootURL + apiKey + check + IP
+		var resp *http.Response
+		if resp, err = http.Get(url); err != nil {
+			return
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 500 ||
+			(resp.StatusCode >= 300 && resp.StatusCode < 400) {
+			err = fmt.Errorf("unexpected status code<%s>", resp.Status)
+			resp.Body.Close()
+			return
+		}
+		var obj *apibanObj
+		obj, err = decodeObj(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			if err != ErrRateLimit {
+				return
+			}
+			continue
+		}
+		val := obj.Ipaddress.([]interface{})
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			if banned = !(obj.ID == noneID ||
+				len(val) != 1 ||
+				val[0] != IP); !banned {
+				err = ErrBadRequest
+				return
+			}
+		} else if obj.ID != noneID ||
+			len(val) != 1 ||
+			val[0] != "not blocked" {
+			err = ErrBadRequest
+		}
+		return
+	}
+	return
+}
+
+func decodeObj(body io.Reader) (obj *apibanObj, err error) {
+	obj = new(apibanObj)
+	if err = json.NewDecoder(body).Decode(obj); err != nil {
+		return
+	}
+	switch obj.ID {
+	case noneID: // non-error case
 	case "unauthorized":
 		err = ErrUnauthorized
 		return
@@ -97,25 +174,13 @@ func getNextAPIBan(url string) (ID string, IPs []string, err error) {
 		err = ErrEmptyID
 		return
 	}
-	switch val := obj.Ipaddress.(type) {
-	case string:
+	if val, canCast := obj.Ipaddress.(string); canCast {
 		if val == "rate limit exceeded" {
 			err = ErrRateLimit
 			return
 		}
 		err = ErrBadRequest
 		return
-	case []interface{}:
-		if len(val) == 0 {
-			return
-		}
-		if val[0] == "no new bans" {
-			return
-		}
-		IPs = make([]string, len(val))
-		for i, v := range val {
-			IPs[i] = v.(string)
-		}
 	}
 	return
 }
