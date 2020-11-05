@@ -139,7 +139,7 @@ func TestGetBannedIPs(t *testing.T) {
 	if m := checkBanned([]string{"badAuth2"}, nil, ErrUnauthorized); len(m) != 0 {
 		t.Error(m)
 	}
-	if m := checkBanned([]string{"testRateLimit"}, nil, fmt.Errorf("client error<429 Too Many Requests>")); len(m) != 0 {
+	if m := checkBanned([]string{"testRateLimit"}, nil, ErrRateLimit); len(m) != 0 {
 		t.Error(m)
 	}
 	if m := checkBanned([]string{"testRateLimit2"}, nil, ErrRateLimit); len(m) != 0 {
