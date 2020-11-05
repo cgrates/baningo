@@ -74,20 +74,27 @@ func getNextAPIBan(url string) (ID string, IPs []string, err error) {
 	}
 	defer resp.Body.Close()
 	switch {
-	case resp.StatusCode > 400 && resp.StatusCode < 500:
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+	case resp.StatusCode == http.StatusBadRequest:
+	case resp.StatusCode == http.StatusNotFound:
+	case resp.StatusCode == http.StatusTooManyRequests:
+	case resp.StatusCode >= 400 && resp.StatusCode < 500:
 		err = fmt.Errorf("client error<%s>", resp.Status)
 		return
 	case resp.StatusCode >= 500:
 		err = fmt.Errorf("server error<%s>", resp.Status)
 		return
-	case resp.StatusCode == http.StatusBadRequest:
-	case resp.StatusCode >= 200 && resp.StatusCode < 300:
 	default:
 		err = fmt.Errorf("unexpected status code<%s>", resp.Status)
 		return
 	}
 	var obj *apibanObj
 	if obj, err = decodeObj(resp.Body); err != nil {
+		if err == io.EOF &&
+			resp.StatusCode >= 400 &&
+			resp.StatusCode < 500 {
+			err = fmt.Errorf("client error<%s>", resp.Status)
+		}
 		return
 	}
 	ID = obj.ID
