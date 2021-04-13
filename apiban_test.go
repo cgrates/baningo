@@ -7,6 +7,7 @@ Provides a client for APIBan writen in go.
 package baningo
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -95,7 +96,7 @@ func TestGetBannedIPs(t *testing.T) {
 	defer testServer.Close()
 
 	checkBanned := func(keys, ips []string, expErr error) string {
-		result, err := GetBannedIPs(keys...)
+		result, err := GetBannedIPs(context.Background(), keys...)
 		if expErr == nil {
 			if err != nil {
 				return fmt.Sprintf("Expected error: %s, received: %s", expErr, err)
@@ -171,7 +172,7 @@ func TestCheck(t *testing.T) {
 	defer testServer.Close()
 
 	check := func(keys []string, ip string, expErr error, exp bool) string {
-		result, err := CheckIP(ip, keys...)
+		result, err := CheckIP(context.Background(), ip, keys...)
 		if expErr == nil {
 			if err != nil {
 				return fmt.Sprintf("Expected error: %s, received: %s", expErr, err)
