@@ -7,6 +7,7 @@ Provides a client for APIBan writen in go.
 package baningo
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,14 +41,14 @@ type apibanObj struct {
 
 // GetBannedIPs this function will return all the IPs that are banned by apiban
 // in case of a rate limit exceeded will continue with the next apiKey
-func GetBannedIPs(apiKeys ...string) (IPs []string, err error) {
+func GetBannedIPs(ctx context.Context, apiKeys ...string) (IPs []string, err error) {
 	ID := "100"
 	for _, apiKey := range apiKeys {
 		u := RootURL + apiKey + banned
 		var newID string
 		var nextIPs []string
 		for newID != noneID {
-			if newID, nextIPs, err = getNextAPIBan(u + ID); err != nil {
+			if newID, nextIPs, err = getNextAPIBan(ctx, u+ID); err != nil {
 				break
 			}
 			ID = newID
@@ -67,9 +68,9 @@ func GetBannedIPs(apiKeys ...string) (IPs []string, err error) {
 	return
 }
 
-func getNextAPIBan(url string) (ID string, IPs []string, err error) {
+func getNextAPIBan(ctx context.Context, url string) (ID string, IPs []string, err error) {
 	var resp *http.Response
-	if resp, err = http.Get(url); err != nil {
+	if resp, err = getHTTP(ctx, url); err != nil {
 		return
 	}
 	defer resp.Body.Close()
@@ -115,9 +116,18 @@ func getNextAPIBan(url string) (ID string, IPs []string, err error) {
 	return
 }
 
+func getHTTP(ctx context.Context, url string) (rsp *http.Response, err error) {
+	var req *http.Request
+	if req, err = http.NewRequestWithContext(ctx, "GET", url, nil); err != nil {
+		return
+	}
+	return http.DefaultClient.Do(req)
+
+}
+
 // CheckIP this function will check if the IP is banned by apiban
 // in case of a rate limit exceeded will continue with the next apiKey
-func CheckIP(IP string, apiKeys ...string) (banned bool, err error) {
+func CheckIP(ctx context.Context, IP string, apiKeys ...string) (banned bool, err error) {
 	if len(IP) == 0 {
 		err = errors.New("IP address is required")
 		return
@@ -129,7 +139,7 @@ func CheckIP(IP string, apiKeys ...string) (banned bool, err error) {
 	for _, apiKey := range apiKeys {
 		url := RootURL + apiKey + check + IP
 		var resp *http.Response
-		if resp, err = http.Get(url); err != nil {
+		if resp, err = getHTTP(ctx, url); err != nil {
 			return
 		}
 
