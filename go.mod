@@ -1,3 +1,3 @@
 module github.com/cgrates/baningo
 
-go 1.15
+go 1.17
