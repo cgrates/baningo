@@ -1,8 +1,5 @@
-/*
-apiban.go is released under the MIT License <http://www.opensource.org/licenses/mit-license.php
-Copyright (C) ITsysCOM GmbH
-Provides a client for APIBan writen in go.
-*/
+// Copyright ITsysCOM GmbH
+// SPDX-License-Identifier: MIT
 
 package baningo
 
